@@ -1,67 +1,92 @@
-const updater = state => async us => {
-  us.forEach(u => {
-    console.log("UPDATE", u.tag, u.val);
-    switch (u.tag) {
-      case "nav": {
-        state.page = u.val;
-        break;
-      }
-      case "paymentRequest": {
-        state.paymentRequests.push(u.val);
-        break;
-      }
-      case "addItemToCart": {
-        const inCart = state.cart.has(u.val) ? state.cart.get(u.val) : 0;
-        state.cart.set(u.val, inCart + 1);
-        break;
-      }
-      case "removeItem": {
-        state.cart.delete(u.val);
-        break;
-      }
-      case "flushCart": {
-        state.cart = new Map();
-        break;
-      }
-      case "focusSurvey": {
-        state.surveyFocus = u.val;
-        break;
-      }
-      case "newSeed": {
-        state.keychain.setSeed(u.val);
-        break;
-      }
-      case "randomSeed": {
-        state.keychain.randomSeed();
-        break;
-      }
-      case "clearSeed": {
-        state.keychain.clearSeed();
-        break;
-      }
-      case "confirmation": {
-        switch (u.val.id.type) {
-          case "ItemT": {
-            // New item
-            break;
-          }
-          case "SurveyT": {
-            // New survey
-            break;
-          }
-          case "OrderT": {
-            // New order
-            break;
-          }
+const updater = (send, state) => {
+  const encoder = new TextEncoder();
+  return async us => {
+    for (const u of us) {
+      console.log("UPDATE", u.tag, u.val);
+      switch (u.tag) {
+        case "nav": {
+          state.page = u.val;
+          break;
         }
-        break;
-      }
-      case "save": {
-        console.log("save not implemented");
-        break;
+        case "backup": {
+          const backupString = `/backup/${Date.now()}`;
+          const req = await send({
+            tag: "newBlob",
+            data: hexEncode(encoder.encode(storableState(state))), 
+            key: await state.keychain.deriveKey(backupString),
+            lifetime: 2
+          });
+
+          state.paymentRequests.push({
+            desc: backupString,
+            date: new Date(),
+            rHash: req.rHash,
+            req: req.paymentRequest
+          });
+
+          putUserState(state);
+          break;
+        }
+        case "paymentRequest": {
+          state.paymentRequests.push(u.val);
+          putUserState(state);
+          break;
+        }
+        case "addItemToCart": {
+          const inCart = state.cart.has(u.val) ? state.cart.get(u.val) : 0;
+          state.cart.set(u.val, inCart + 1);
+          break;
+        }
+        case "removeItem": {
+          state.cart.delete(u.val);
+          break;
+        }
+        case "flushCart": {
+          state.cart = new Map();
+          break;
+        }
+        case "focusSurvey": {
+          state.surveyFocus = u.val;
+          break;
+        }
+        case "newSeed": {
+          state.keychain.setSeed(u.val);
+          state.key = hexDecode(u.val);
+          break;
+        }
+        case "randomSeed": {
+          state.keychain.randomSeed();
+          state.key = state.keychain.getSeed(); 
+          break;
+        }
+        case "clearSeed": {
+          state.keychain.clearSeed();
+          break;
+        }
+        case "confirmation": {
+          switch (u.val.id.type) {
+            case "ItemT": {
+              // New item
+              break;
+            }
+            case "SurveyT": {
+              // New survey
+              break;
+            }
+            case "OrderT": {
+              // New order
+              break;
+            }
+          }
+          break;
+        }
+        case "save": {
+          console.log("save not implemented");
+          break;
+        }
       }
     }
-  });
+  }
 };
 
 const refresh = (node, state, send, updates) => {

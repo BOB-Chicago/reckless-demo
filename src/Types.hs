@@ -90,12 +90,21 @@ instance FromJSON Quantity where
 newtype Base64Encoded = Base64Encoded { unBase64Encode :: ByteString }
 
 instance FromJSON Base64Encoded where
-    parseJSON = withText "Base64Encoded" $ \hex ->
-        either fail (return . Base64Encoded) $ B64.decode $ TE.encodeUtf8 hex
+    parseJSON = withText "Base64Encoded" $
+        either fail (return . Base64Encoded) . B64.decode . TE.encodeUtf8
 
 instance ToJSON Base64Encoded where
     toJSON = toJSON . BS8.unpack . B64.encode . unBase64Encode
 
+-- | ByteStrings that should be (de)serialized to hex strings
+newtype HexEncoded = HexEncoded { unHexEncode :: ByteString }
+
+instance FromJSON HexEncoded where
+    parseJSON = withText "HexEncoded" $
+        return . HexEncoded . fst . B16.decode . TE.encodeUtf8
+
+instance ToJSON HexEncoded where
+    toJSON = toJSON . BS8.unpack . B16.encode . unHexEncode
 
 -- ~~~~~~~~~~~~~~ --
 -- App data model --
@@ -172,17 +181,18 @@ type family Id a where
     Id Order = Word32
     Id Survey = Word32
     Id Contribution = Word32
-    Id Blob = Word32
     Id Item = Word32
 
+    Id Blob = ByteString
 
-data TagW32 = ItemT | SurveyT | OrderT | ContributionT | BlobT
+
+data TagW32 = ItemT | SurveyT | OrderT | ContributionT
     deriving (Eq, Show, Generic)
 
 instance ToJSON TagW32 where
     toJSON = toJSON . show
 
-data TagBS = DOpT
+data TagBS = DOpT | BlobT
     deriving (Eq, Show, Generic)
 
 instance ToJSON TagBS where
@@ -261,7 +271,7 @@ data MessageTo a where
                  , newSurveyQuestions :: Vector Text } -> MessageTo Server
 
     -- | Upload a new blob
-    NewBlob :: { blob :: ByteString, blobLifetime :: Word32 } -> MessageTo Server
+    NewBlob :: { blob :: ByteString, blobKey :: ByteString, blobLifetime :: Word32 } -> MessageTo Server
 
     -- | The client responds to a survey
     SurveyResponse :: { surveyId :: Id Survey, surveyResponse :: Vector Text } -> MessageTo Server
@@ -330,7 +340,10 @@ instance FromJSON (SessionMessage Server) where
                 NewSurvey <$> key <*> obj .: "title" <*> obj .: "questions"
 
             | tag == "newBlob" ->
-                NewBlob <$> (unBase64Encode <$> obj .: "data") <*> obj .: "lifetime"
+                NewBlob <$>
+                (unHexEncode <$> obj .: "data") <*>
+                (unHexEncode <$> obj .: "key") <*>
+                obj .: "lifetime"
 
             | tag == "surveyResponse" -> SurveyResponse <$> obj .: "id" <*> obj .: "responses"
 

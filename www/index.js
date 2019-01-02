@@ -1,6 +1,8 @@
 const init = async () => {
   const node = document.getElementById("app");
 
+  const restored = userState();
+
   const keychain = localKeychain();
   const startPage = keychain.exists() ? "start" : "keychain.start";
 
@@ -10,7 +12,9 @@ const init = async () => {
     surveys: new Map(),
     cart: new Map(),
     keychain,
-    paymentRequests: []
+    key: restored.key,
+    paymentRequests: restored.paymentRequests,
+    history: restored.orderHistory
   };
 
   const handler = async (msg, send) => {
@@ -79,7 +83,7 @@ const init = async () => {
   };
 
   const ws = BOBSocket(window.bobSocketUrl, handler);
-  const update = updater(state);
+  const update = updater(ws.send, state);
 
   if (keychain.exists()) {
     const key = await keychain.deriveKey("/id");
@@ -91,7 +95,7 @@ const init = async () => {
 
   while (true) {
     const us = await new Promise(f => refresh(node, state, ws.send, f));
-    update(us);
+    await update( us);
   }
 };
 

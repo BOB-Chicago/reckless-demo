@@ -21,17 +21,18 @@ const mainPage = app => navButton(app, "start", ">> start page");
 /* start */
 
 const startPage = async app => {
-  const saveButton = button("save session", async () => {
-    const key = await app.key("/save");
-    const result = await app.send({
-      tag: "newBlob",
-      data: key,
-      lifetime: 2
-    });
-
-    handlePaymentRequest(app, result, "save session", [
+  
+  // Backup data to the server
+  const backup = button("backup your data", async () => {
+    app.updates([
+      { tag: "backup", val: null },
       { tag: "nav", val: "paymentRequests" }
     ]);
+  });
+
+  const restore = button("restore your data", async app => {
+    // Not implemented
+    app.updates([]);
   });
 
   const always = [navButton(app, "keychain.start", "manage keys")];
@@ -48,7 +49,8 @@ const startPage = async app => {
           navButton(app, "store", "visit the store"),
           navButton(app, "newSurvey", "add a survey"),
           navButton(app, "newItem", "add an item"),
-          saveButton
+          backup,
+          restore
         ]);
 
   app.page([

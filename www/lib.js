@@ -31,20 +31,20 @@ const BOBSocket = (url, handle) => {
   const send = msg =>
     new Promise((resolve, reject) => {
       withNonce(n => {
-        const smsg = { nonce: n, ...msg };
-        console.log("OUTBOUND MESSAGE", smsg);
+        msg.nonce = n;
+        console.log("OUTBOUND MESSAGE", msg);
 
         if (ws.readyState === 1) {
           console.log("sending ...");
 
           flushBuffer();
 
-          ws.send(JSON.stringify(smsg));
+          ws.send(JSON.stringify(msg));
           callbacks.set(n, resolve);
         } else {
           console.log("buffering ...");
 
-          buffer.push(smsg);
+          buffer.push(msg);
           callbacks.set(n, resolve);
         }
       });

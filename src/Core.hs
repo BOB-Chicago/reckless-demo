@@ -25,6 +25,7 @@ module Core (
     ) where
 
 
+import           Control.Applicative
 import           Control.Arrow
 import           Control.Lens           as Lens
 import           Control.Monad
@@ -79,10 +80,10 @@ instance ToJSON AppState where
         [ ("items", jsonMap appItems)
         , ("orders", jsonMap appOrders)
         , ("invoiced", invoiced)
-        , ("blobs", jsonMap appBlobs)
+        , ("blobs", bsJsonMap appBlobs)
         , ("contributions", jsonMap appContributions)
         , ("surveys", jsonMap appSurveys)
-        , ("owners", owners appOwners)
+        , ("owners", bsJsonMap appOwners)
         , ("mailbox", mailbox appMailbox)
         , ("key", toJSON appAdminKey)
         ]
@@ -96,7 +97,8 @@ instance ToJSON AppState where
 
         mailbox = jsonMap . getCompose . fmap (SessionMessage 0 Nothing) . Compose
 
-        owners = toJSON . fmap (first Base64Encoded) . Map.toList
+        bsJsonMap :: ToJSON v => Map ByteString v -> Value
+        bsJsonMap = toJSON . fmap (first Base64Encoded) . Map.toList
 
         jsonMap :: (ToJSON a, ToJSON b) => Map a b -> Value
         jsonMap = toJSON . Map.toList
@@ -107,7 +109,7 @@ instance Ae.FromJSON AppState where
         let invoiced = Map.fromList . fmap f <$> obj .: "invoiced"
             f (Base64Encoded k, ix) = (k, PaidForOrder ix)
             -- sessions = Map.fromList . fmap (second $ fmap messageBody)
-            owners = Map.fromList . fmap (first unBase64Encode)
+            bsMap = Map.fromList . fmap (first unBase64Encode)
         in
         AppState <$>
             fmap Map.fromList (obj .: "items") <*>
@@ -115,8 +117,8 @@ instance Ae.FromJSON AppState where
             fmap Map.fromList (obj .: "contributions") <*>
             fmap Map.fromList (obj .: "surveys") <*>
             invoiced <*>
-            fmap Map.fromList (obj .: "blobs") <*>
-            fmap owners (obj .: "owners") <*>
+            fmap bsMap (obj .: "blobs") <*>
+            fmap bsMap (obj .: "owners") <*>
             pure Map.empty <*>
             -- fmap sessions (obj .: "sessions") <*>
             obj .: "key"
@@ -133,8 +135,10 @@ emptyState =
         Map.empty -- Owners
         Map.empty -- Sessions
 
+sha256 = BA.convert . hashWith SHA256
 
-mkItemKey (Key bytes) = Key $ BA.convert $ hashWith SHA256 $ bytes <> "/item"
+mkItemKey (Key bytes) = Key . sha256  $ bytes <> "/item"
+mkBlobId (Key userKey) (Key blobKey) = sha256 $ userKey <> blobKey
 
 -- ~~~~~~~~~~~ --
 -- Addressable --
@@ -151,9 +155,14 @@ runDataOpMap :: (Applicative m, Ord k)
     -> Map k a
     -> m (AppST, Map k a)
 runDataOpMap nextId op state = case op of
-    DNew x k ->
-        let ix = nextId x $ fst <$> Map.lookupMax state
-            state' = Map.insert ix x state in
+    -- | If the suggested key is available insert the object with the suggested
+    -- key.  Otherwise find an unused key for the object.
+    DNew x suggestion k ->
+        let ix = fromMaybe newKey $ vet =<< suggestion
+            newKey = nextId x $ fst <$> Map.lookupMax state
+            vet s = Just s `maybe` const Nothing $ Map.lookup s state
+            state' = Map.insert ix x state
+        in
         pure (k ix, state')
 
     DUpdate ix f next ->
@@ -164,37 +173,34 @@ runDataOpMap nextId op state = case op of
         let lookup' = flip Map.lookup state in
         pure (k $ lookup' <$> fx, state)
 
+nextW32 _ = maybe 0 (+1)
 
 instance Addressable Word32 Item where
     runDataOp op state@AppState{..} =
         let f x = state { appItems = x }
-            nextId _ = maybe 0 (+1)
-        in second f <$> runDataOpMap nextId op appItems
+        in second f <$> runDataOpMap nextW32 op appItems
 
 instance Addressable Word32 Survey where
     runDataOp op state@AppState{..} =
         let f x = state { appSurveys = x }
-            nextId _ = maybe 0 (+1)
-        in second f <$> runDataOpMap nextId op appSurveys
+        in second f <$> runDataOpMap nextW32 op appSurveys
 
 instance Addressable Word32 Order where
     runDataOp op state@AppState{..} =
         let f x = state { appOrders = x }
-            nextId _ = maybe 0 (+1)
-        in second f <$> runDataOpMap nextId op appOrders
+        in second f <$> runDataOpMap nextW32 op appOrders
 
 
 instance Addressable Word32 Contribution where
     runDataOp op state@AppState{..} =
         let f x = state { appContributions = x }
-            nextId _ = maybe 0 (+1)
-        in second f <$> runDataOpMap nextId op appContributions
+        in second f <$> runDataOpMap nextW32 op appContributions
 
 
-instance Addressable Word32 Blob where
+instance Addressable ByteString Blob where
     runDataOp op state@AppState{..} =
         let f x = state { appBlobs = x }
-            nextId _ = maybe 0 (+1)
+            nextId (Blob b _) _ = sha256 b
         in second f <$> runDataOpMap nextId op appBlobs
 
 
@@ -204,7 +210,8 @@ instance Addressable Word32 Blob where
 
 -- | Generic operations on primary data
 data DataOp k a where
-    DNew :: a -> (k -> AppST) -> DataOp k a
+    -- | We allow a key suggestion
+    DNew :: a -> Maybe k -> (k -> AppST) -> DataOp k a
 
     DUpdate :: k -> (a -> a) -> AppST -> DataOp k a
 
@@ -260,7 +267,7 @@ protocol Pricing{..} = \case
     Donate msg amount ->
         WithPR (Satoshis amount) "donation" $ \req@(PaymentRequest hash _) ->
         let newContribution :: DataOp (Id Contribution) Contribution
-            newContribution = DNew (Contribution amount msg) $ \ix ->
+            newContribution = DNew (Contribution amount msg) Nothing $ \ix ->
                 Emit $ Confirmation (IdT ContributionT ix) (Just hash)
         in
         PaymentHandler hash (PaidForDOp hash newContribution) $
@@ -282,7 +289,7 @@ protocol Pricing{..} = \case
         in
         WithPR (Cents totalCents) "order" $ \req@(PaymentRequest hash _) ->
         let order = Order stuff hash key False False in
-        RunDataOp $ DNew order $ \ix ->
+        RunDataOp $ DNew order Nothing $ \ix ->
             PaymentHandler hash (PaidForOrder ix) $
             Emit $ PaymentRequestMsg req
 
@@ -296,7 +303,7 @@ protocol Pricing{..} = \case
         let item = Item newItemDescription newItemPrice
 
             newItem :: DataOp (Id Item) Item
-            newItem = DNew item $ \ix ->
+            newItem = DNew item Nothing $ \ix ->
                 Emit $ Confirmation (IdT ItemT ix) Nothing
 
         in
@@ -308,7 +315,7 @@ protocol Pricing{..} = \case
         let survey = Survey newSurveyTitle newSurveyQuestions []
 
             createSurvey :: DataOp (Id Survey) Survey
-            createSurvey = DNew survey $ \ix ->
+            createSurvey = DNew survey Nothing $ \ix ->
                 Emit $ Confirmation (IdT SurveyT ix) (Just hash)
 
         in
@@ -324,8 +331,8 @@ protocol Pricing{..} = \case
         WithCurrentTime $ \now ->
 
         let storeBlob :: DataOp (Id Blob) Blob
-            storeBlob = DNew newBlob $ \ix ->
-                Emit $ Confirmation (IdT BlobT ix) (Just hash)
+            storeBlob = DNew newBlob (Just blobKey) $ \ix ->
+                Emit $ Confirmation (IdH BlobT ix) (Just hash)
             newBlob = Blob blob $
                 let UTCTime d dt = now in
                 UTCTime (addDays (fromIntegral blobLifetime) d) dt
