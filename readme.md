@@ -1,5 +1,5 @@
 ---
-version: alpha
+version: alpha/1.1
 ---
 
 Recklessly exploring micropayments
@@ -10,6 +10,14 @@ meetup, the main use case is donations.  With lightning, microdonations of less
 than a cent are possible.  Besides donations, users can create and fill out 
 surveys; and shop at a store.  The backend supports paying to store a blob at a 
 daily rate, but it is not implemented in the UI yet.
+
+
+Principles
+----
+
+* Users are opaque to the server.
+* Clients can connect many servers, if they want to do the bookkeeping.
+
 
 Build instructions
 ----
