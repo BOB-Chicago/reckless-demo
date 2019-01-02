@@ -1,0 +1,7 @@
+dist-newstyle/
+.ghc.environment.*
+cabal.project.local
+
+www/config.js
+
+*.swp

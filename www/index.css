@@ -1,0 +1,52 @@
+body {
+	font-family: monospace;
+}
+
+span {
+	padding: 1ex;
+}
+
+div {
+	margin-bottom: 2ex;
+}
+
+div.column {
+	display: flex;
+	flex-direction: column;
+}
+
+div.row {
+	display: flex;
+	flex-direction: row;
+}
+
+p {
+	padding: 1ex;
+	margin-bottom: 1ex;
+}
+
+#app {
+	margin-left: 10%;
+	margin-top: 10ex;
+}
+
+input {
+	border: 1px solid #222222;
+	width: 45ex;
+}
+
+.button {
+	border: 1px solid black;
+	padding: 1ex;
+	margin-right: 1ex;
+	margin-bottom: 1ex;
+}
+
+.button:hover {
+	cursor: pointer;
+	background: lightblue;
+}
+
+.explainer {
+	width: 80ch;
+}
