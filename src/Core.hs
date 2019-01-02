@@ -395,7 +395,9 @@ sweepOne hash =
         if  | invoiceSettled && invoiceAmountPaid >= invoiceAmount ->
                 ResolveInvoiced hash $ \case
                 Nothing -> NoOp
-                Just x -> Emit $ Confirmation x $ Just hash
+                Just x -> case x of
+                    IdH DOpT _ -> NoOp
+                    _          -> Emit $ Confirmation x $ Just hash
 
             -- there was a payment but it is not enough to cover the order
             | invoiceSettled && invoiceAmountPaid < invoiceAmount ->
