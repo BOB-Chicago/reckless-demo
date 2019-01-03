@@ -13,6 +13,7 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeFamilies          #-}
 
 module Core (
@@ -350,16 +351,20 @@ protocol Pricing{..} = \case
         RunDataOp dview
 
 
-    Resolve{..} -> case resolutionId of
+    Resolve{..} ->
+        let emit :: ToJSON a => Maybe a -> AppST
+            emit = Emit . maybe Ack (Object . toJSON . (resolutionId,))
+        in
+        case resolutionId of
         IdT SurveyT ix ->
             let dview :: DataOp (Id Survey) Survey
-                dview = rview' ix $ Emit . maybe Ack (Object . toJSON)
+                dview = rview' ix emit
             in
             RunDataOp dview
 
         IdT ItemT ix   ->
             let dview :: DataOp (Id Item) Item
-                dview = rview' ix $ Emit . maybe Ack (Object . toJSON)
+                dview = rview' ix emit
             in
             RunDataOp dview
 
@@ -370,13 +375,13 @@ protocol Pricing{..} = \case
                             obj >>= \o@Order{..} ->
                             if orderKey == key then Just o else Nothing
                     in
-                    Emit . maybe Ack (Object . toJSON) . guardKey
+                    emit . guardKey
             in
             RunDataOp dview
 
         IdT ContributionT ix ->
             let dview :: DataOp (Id Contribution) Contribution
-                dview = rview' ix $ Emit . maybe Ack (Object . toJSON)
+                dview = rview' ix emit
             in
             RunDataOp dview
 
