@@ -44,13 +44,8 @@ const startPage = async app => {
       ? always
       : always.concat([
           navButton(app, "paymentRequests", "view payment requests"),
-          navButton(app, "surveys", "take a survey"),
           navButton(app, "donations", "make a donation"),
-          navButton(app, "store", "visit the store"),
-          navButton(app, "newSurvey", "add a survey"),
-          navButton(app, "newItem", "add an item"),
-          backup,
-          restore
+          backup
         ]);
 
   app.page([

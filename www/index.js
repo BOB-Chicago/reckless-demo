@@ -26,6 +26,12 @@ const init = async () => {
       }
 
       case "confirmation": {
+        state.paymentRequests.forEach(req => {
+          if (req.rHash === msg.rHash) {
+            req.complete = true;
+          }
+        });
+
         const getReply = async () => {
           switch (msg.id.type) {
             case "OrderT": {

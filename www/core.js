@@ -218,6 +218,7 @@ const handlePaymentRequest = (app, msg, desc, additionalUpdates) => {
       {
         tag: "paymentRequest",
         val: {
+          complete: false,
           desc,
           date: new Date(),
           hash: msg.rHash,

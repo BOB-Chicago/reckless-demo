@@ -219,7 +219,7 @@ const inDollars = cents => "$" + cents / 100;
 
 const formatRequest = pr =>
   inline([
-    textNode("(" + pr.date.toString() + "): "),
+    textNode(`(${pr.date.toString()} ${pr.complete ? "PAID" : ""}): `),
     link("lightning:" + pr.req, pr.desc)
   ]);
 
