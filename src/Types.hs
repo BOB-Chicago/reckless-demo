@@ -233,12 +233,6 @@ data MessageTo a where
 
     Confirmation :: TaggedId -> Maybe ByteString -> MessageTo Client
 
-    -- | The server sends the client its order history
-    OrderHistory :: Page Order -> MessageTo Client
-
-    -- | The server advertises the open surveys
-    OpenSurveys :: Page Survey -> MessageTo Client
-
     -- | The server can send any object to the client
     Object :: Value -> MessageTo Client
 
@@ -304,12 +298,6 @@ instance ToJSON (SessionMessage Client) where
                     [ ("id", toJSON tix)
                     , ("rRash", toJSON (Base64Encoded <$> h))
                     ]
-
-            OrderHistory xs ->
-                message "orderHistory" [("orders", toJSON xs)]
-
-            OpenSurveys xs ->
-                message "openSurveys" [("surveys", toJSON xs)]
 
             Types.Object x -> message "object" [("payload", toJSON x)]
 
