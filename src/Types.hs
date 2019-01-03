@@ -1,12 +1,13 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE DeriveGeneric       #-}
-{-# LANGUAGE FlexibleInstances   #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE DataKinds                  #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE FlexibleInstances          #-}
+{-# LANGUAGE GADTs                      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MultiWayIf                 #-}
+{-# LANGUAGE OverloadedStrings          #-}
+{-# LANGUAGE RecordWildCards            #-}
+{-# LANGUAGE ScopedTypeVariables        #-}
+{-# LANGUAGE TypeFamilies               #-}
 
 module Types where
 
@@ -77,13 +78,7 @@ data MoneyAmount
 
 
 newtype Quantity = Quantity Word16
-    deriving (Eq, Ord, Show)
-
-instance ToJSON Quantity where
-    toJSON (Quantity x) = toJSON x
-
-instance FromJSON Quantity where
-    parseJSON = fmap Quantity . parseJSON
+    deriving (Eq, Ord, ToJSON, FromJSON)
 
 
 -- | ByteStrings that should be (de)serialized to hex strings
