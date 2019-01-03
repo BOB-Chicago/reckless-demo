@@ -182,9 +182,9 @@ simpleServer pricing appS receiveMessage sendMessage watchMailbox =
     liftIO (readMVar appS) >>= \AppState{..} ->
 
     -- Start by sending some public objects
-    let surveys = Types.Object . first (IdT SurveyT) <$> Map.toList appSurveys
+    let surveys = Types.Object . toJSON . first (IdT SurveyT) <$> Map.toList appSurveys
 
-        items = Types.Object . first (IdT ItemT) <$> Map.toList appItems
+        items = Types.Object . toJSON . first (IdT ItemT) <$> Map.toList appItems
 
         sendObject msg =
             get >>= \n ->

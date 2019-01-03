@@ -240,7 +240,7 @@ data MessageTo a where
     OpenSurveys :: Page Survey -> MessageTo Client
 
     -- | The server can send any object to the client
-    Object :: ToJSON a => a -> MessageTo Client
+    Object :: Value -> MessageTo Client
 
     -- | Used to establish an configure the session
     Sync :: Key -> MessageTo Server
