@@ -296,7 +296,7 @@ instance ToJSON (SessionMessage Client) where
             Confirmation tix h ->
                 message "confirmation"
                     [ ("id", toJSON tix)
-                    , ("rRash", toJSON (Base64Encoded <$> h))
+                    , ("rHash", toJSON (Base64Encoded <$> h))
                     ]
 
             Types.Object x -> message "object" [("payload", toJSON x)]

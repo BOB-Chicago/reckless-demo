@@ -1,12 +1,8 @@
-# Revision history for bob-services
+# Revision history for bob-server
 
-## 0.1.1 -- 2019-01-?
+## 0.1.1 -- 2019-01-03
 
 * Adds support for paid blob storage
-
-- [x] state backup on front end
-- [ ] restore backup
-- [ ] store/retrieve any blob
 
 ## 0.1.0 -- 2019-01-01
 
