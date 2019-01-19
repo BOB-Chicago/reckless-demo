@@ -8,29 +8,33 @@
 
 module Main where
 
-import           Control.Concurrent   as Co
+import           Control.Concurrent             as Co
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Logger
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Crypto.Random        as Cr
-import           Data.Aeson           as Ae
-import           Data.Bifunctor       as Bf
-import           Data.ByteString      as BS
-import qualified Data.ByteString.Lazy as BSL
-import           Data.List            as List
-import           Data.Map.Strict      as Map
+import           Crypto.Random                  as Cr
+import           Data.Aeson                     as Ae
+import           Data.Bifunctor                 as Bf
+import           Data.ByteString                as BS
+import qualified Data.ByteString.Lazy           as BSL
+import           Data.List                      as List
+import           Data.Map.Strict                as Map
 import           Data.Maybe
-import           Data.Text            as Text
+import           Data.Text                      as Text
 import           Data.Word
 import           Network.HTTP.Client
-import           Network.WebSockets   as WS
-import           Options.Applicative  as Opt
+import           Network.HTTP.Types             as HT
+import           Network.Wai                    as Wai
+import           Network.Wai.Handler.Warp       as Warp
+import           Network.Wai.Handler.WebSockets as WW
+import           Network.WebSockets             as WS
+import           Options.Applicative            as Opt
 
 import           Core
 import           Lnd
-import           Types                hiding (Config)
+import           Types                          hiding (Config)
 import qualified Types
 
 -- ~~~~~ --
@@ -116,7 +120,11 @@ main =
 
         Right lndP ->
             -- client connections
-            forkIO (websocketServer pricing servicePort lndP appS) >>
+            let server = acceptRequest >=> websocketServer pricing lndP appS
+                webApp = WW.websocketsOr defaultConnectionOptions server fallback
+                fallback _ respond = respond $ responseLBS status400 [] "websocket requests only"
+            in
+            forkIO (Warp.run servicePort webApp) >>
 
             -- write down the state
             forkIO (simplePersistence appS saveInterval dataFile) >>
@@ -145,11 +153,7 @@ simplePersistence appS saveInterval path = runLog $ forever $
 
 -- | This layer is responsible for packing the required operations into a
 -- simple API
-websocketServer pricing wsPort lndP appS =
-
-    WS.runServer "localhost" (fromIntegral wsPort) $
-
-    acceptRequest >=> \conn ->
+websocketServer pricing lndP appS conn =
 
     let receiveM = liftIO (WS.receiveData conn) >>= \raw ->
             logDebugN (tShow raw) >>

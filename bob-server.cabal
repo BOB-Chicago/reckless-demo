@@ -67,9 +67,13 @@ executable bob-server-exe
     containers,
     cryptonite,
     http-client,
+    http-types,
     monad-logger,
     mtl,
     optparse-applicative >=0.14.3 && <0.14.4,
     text,
+    wai >= 3.2 && < 3.3,
+    wai-websockets >= 3.0 && < 3.1,
+    warp >= 3.2 && < 3.3,
     websockets >= 0.12.5 && < 0.12.6
  
