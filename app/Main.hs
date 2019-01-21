@@ -89,7 +89,10 @@ progOptions =
 
 
 -- | This name is to unwrap from a logging context
-runLog = runStderrLoggingT
+runLog logLevel = runStderrLoggingT . filterLogger f
+    where
+    f _ l = l >= logLevel
+
 
 trySendTextData :: WS.Connection -> BSL.ByteString -> IO (Either ConnectionException ())
 trySendTextData conn = try . WS.sendTextData conn
@@ -127,14 +130,14 @@ main =
             let server =
                     acceptRequest >=>
                     (\conn -> WS.forkPingThread conn 30 >> return conn) >=>
-                    websocketServer pricing lndP appS
+                    void . runLog logLevel . websocketServer pricing lndP appS
                 webApp = WW.websocketsOr defaultConnectionOptions server fallback
                 fallback _ respond = respond $ responseLBS status400 [] "websocket requests only"
             in
             forkIO (Warp.run servicePort webApp) >>
 
             -- write down the state
-            forkIO (simplePersistence appS saveInterval dataFile) >>
+            forkIO (runLog logLevel $ simplePersistence appS saveInterval dataFile) >>
 
             -- we are not using a streaming connection to LND for real time
             -- payment channel updates, so we poll periodically
@@ -143,13 +146,13 @@ main =
                 unpack = flip runReaderT lndP . runExceptT
 
             in
-            runLog $ forever $
+            runLog logLevel $ forever $
                 unpack sweep >>
                 liftIO (threadDelay sweepInterval)
 
 
 -- | Encode the state as a JSON document and write to a file
-simplePersistence appS saveInterval path = runLog $ forever $
+simplePersistence appS saveInterval path = forever $
     let go = readMVar appS >>= \state ->
             BS.writeFile path (BSL.toStrict $ Ae.encode state) >>
             threadDelay saveInterval
@@ -183,7 +186,6 @@ websocketServer pricing lndP appS conn =
             wait
 
     in
-    void . runLog $
     logDebugN "New connection" >>
     run (simpleServer pricing appS receiveM sendM watchMailbox)
 
