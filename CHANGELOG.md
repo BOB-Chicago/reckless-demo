@@ -1,4 +1,4 @@
-# Revision history for bob-server
+# Revision history for reckless-server
 
 ## 0.1.2 -- 2019-01-19
 
