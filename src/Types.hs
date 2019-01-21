@@ -55,6 +55,7 @@ data Config
 data AppError
     = DecodingError String
     | LoadCertError
+    | AppHttpException Http.HttpException
     deriving Show
 
 

@@ -3,6 +3,7 @@
 ## 0.1.2 -- 2019-01-19
 
 * WebSocket server upgrade
+* Stability improvements
 
 ## 0.1.1 -- 2019-01-03
 

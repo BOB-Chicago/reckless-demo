@@ -15,6 +15,7 @@ module Lnd (
     ) where
 
 import           Control.Arrow
+import           Control.Exception
 import           Control.Lens               as Lens
 import           Control.Monad
 import           Control.Monad.Except
@@ -84,19 +85,24 @@ lndTlsSettings lndCAStore = TLSSettings $ ClientParams
 
 -- | Query LND
 lndCall :: FromJSON a => Request -> AppM a
-lndCall req = ExceptT $ ReaderT $ \(Config{..}, mgr) ->
-  let fullReq = req
-        { host = lndHost
-        , port = lndPort
-        , secure = True
-        , requestHeaders =
-          [ (hContentType, "application/json")
-          , (hAccept, "application/json")
-          , ("Grpc-metadata-macaroon", B16.encode macaroon)
-          ]
-        }
-      interpretResponse r = Bf.first DecodingError $ Ae.eitherDecode $ responseBody r
-  in liftIO $ interpretResponse <$> httpLbs fullReq mgr
+lndCall req = preliminaryCall >>= interpretResponse
+
+    where
+
+    interpretResponse = ExceptT . return . Bf.first DecodingError . Ae.eitherDecode . responseBody
+
+    preliminaryCall = ExceptT $ ReaderT $ \(Config{..}, mgr) ->
+        let fullReq = req
+                { host = lndHost
+                , port = lndPort
+                , secure = True
+                , requestHeaders =
+                [ (hContentType, "application/json")
+                , (hAccept, "application/json")
+                , ("Grpc-metadata-macaroon", B16.encode macaroon)
+                ]
+                }
+        in liftIO $ Bf.first AppHttpException <$> try (httpLbs fullReq mgr)
 
 
 -- ~~~~~~~~~ --

@@ -1,14 +1,16 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE FlexibleContexts  #-}
-{-# LANGUAGE GADTs             #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Rank2Types        #-}
-{-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE Rank2Types          #-}
+{-# LANGUAGE RecordWildCards     #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import           Control.Concurrent             as Co
+import           Control.Exception
 import           Control.Monad
 import           Control.Monad.Except
 import           Control.Monad.Logger
@@ -89,6 +91,8 @@ progOptions =
 -- | This name is to unwrap from a logging context
 runLog = runStderrLoggingT
 
+trySendTextData :: WS.Connection -> BSL.ByteString -> IO (Either ConnectionException ())
+trySendTextData conn = try . WS.sendTextData conn
 
 -- ~~~~~~~~~~~ --
 -- Entry point --
@@ -159,16 +163,16 @@ websocketServer pricing lndP appS conn =
             logDebugN (tShow raw) >>
             return raw
 
-        sendM = liftIO . WS.sendTextData conn . Ae.encode
+
+        sendM = liftIO . trySendTextData conn . Ae.encode
 
         run = flip runReaderT lndP . runExceptT
 
         wait = threadDelay $ 2 * 10 ^ 6
 
         watchMailbox key = forever $ takeMVar appS >>= \state@AppState{..} ->
-            let deliver = maybe (return ()) $
-                    mapM_ sendMsg
-                sendMsg = WS.sendTextData conn . Ae.encode . SessionMessage 0 Nothing
+            let deliver = maybe (return ()) $ mapM_ sendMsg
+                sendMsg = trySendTextData conn . Ae.encode . SessionMessage 0 Nothing
                 state' = state { appMailbox = Map.delete key appMailbox }
             in
             deliver (Map.lookup key appMailbox) >>
@@ -194,7 +198,9 @@ simpleServer pricing appS receiveMessage sendMessage watchMailbox =
             get >>= \n ->
             put (n+1) >>
             let smsg = SessionMessage n Nothing msg in
-            lift (sendMessage smsg)
+            lift (sendMessage smsg) >>=
+            let recover (e :: ConnectionException) = liftIO (print e) >> put n in
+            either recover (const $ return ())
     in
     execStateT (mapM sendObject $ surveys ++ items) 1 >>= \n ->
 
@@ -239,7 +245,9 @@ simpleServer pricing appS receiveMessage sendMessage watchMailbox =
                             saveState appS >>
                             lift (loop' (n+1))
 
-                        emit = sendMessage . SessionMessage n (Just cn)
+                        emit = (>>= either recover (const $ return ())) . sendMessage . SessionMessage n (Just cn)
+                        recover e = logErrorN (tShow e)
+
                         noop = return ()
                         keyGuard = ($ key)
 
