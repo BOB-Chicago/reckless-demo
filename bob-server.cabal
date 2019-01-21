@@ -12,9 +12,6 @@ category:            Web
 build-type:          Simple
 extra-source-files:  
   CHANGELOG.md
-  www/index.html
-  www/index.js
-  www/index.css
 cabal-version:       >=2.0
 
 library
