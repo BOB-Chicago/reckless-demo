@@ -124,7 +124,10 @@ main =
 
         Right lndP ->
             -- client connections
-            let server = acceptRequest >=> websocketServer pricing lndP appS
+            let server =
+                    acceptRequest >=>
+                    (\conn -> WS.forkPingThread conn 30 >> return conn) >=>
+                    websocketServer pricing lndP appS
                 webApp = WW.websocketsOr defaultConnectionOptions server fallback
                 fallback _ respond = respond $ responseLBS status400 [] "websocket requests only"
             in
