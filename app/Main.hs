@@ -209,29 +209,10 @@ simpleServer pricing appS receiveMessage sendMessage watchMailbox =
     in
     execStateT (mapM sendObject $ surveys ++ items) 1 >>= \n ->
 
-    -- Wait for the user send their session key
-    establish >>= \key ->
-
-    -- Route messages coming from elsewhere to this user
-    liftIO (forkIO $ watchMailbox key) >>
-
     -- Main protocol loop
-    loop key n
+    loop Nothing n
 
     where
-
-    establish = receiveMessage >>= \raw ->
-        case Ae.eitherDecode raw :: Either String (SessionMessage Server) of
-            Left err ->
-                logDebugN (Text.pack err) >>
-                establish
-
-            Right (SessionMessage i _ (Sync key)) ->
-                logDebugN (tShow key) >>
-                sendMessage (SessionMessage 0 (Just i) Ack) >>
-                return key
-
-            _ -> establish
 
     loop key n = let loop' = loop key in
         receiveMessage >>= \raw ->
@@ -241,20 +222,28 @@ simpleServer pricing appS receiveMessage sendMessage watchMailbox =
                     logDebugN logText >>
                     loop' n
 
+                Right (SessionMessage i _ (Sync key)) ->
+                    logDebugN (tShow key) >>
+                    -- Route messages coming from elsewhere to this user
+                    liftIO (forkIO $ watchMailbox key) >>
+                    sendMessage (SessionMessage n (Just i) Ack) >>
+                    loop (Just key) (n+1)
+
                 Right (SessionMessage cn ref msg) ->
                     logDebugN "Handling message" >>
 
                     -- run the protocol in the straightforward way
                     let handleMessage =
-                            runApp keyGuard emit noop (protocol pricing msg) >>
+                            runApp key emit noop (protocol pricing msg) >>
                             saveState appS >>
                             lift (loop' (n+1))
 
-                        emit = (>>= either recover (const $ return ())) . sendMessage . SessionMessage n (Just cn)
+                        emit msg = sendMessage (SessionMessage n (Just cn) msg) >>=
+                            either recover (const $ return ())
+
                         recover e = logErrorN (tShow e)
 
                         noop = return ()
-                        keyGuard = ($ key)
 
                         cleanup err =
                             logErrorN (tShow err) >>
@@ -272,12 +261,11 @@ sweeper appS =
 
     logDebugN "START sweep" >>
 
-    let op h = catchError (runApp keyGuard emit noop $ sweepOne h) $ \err ->
+    let op h = catchError (runApp Nothing emit noop $ sweepOne h) $ \err ->
             logErrorN (tShow err) >> return []
 
         emit = return . (:[])
         noop = return [Ack]
-        keyGuard _ = return [Ack]
 
         sweep = get >>= \AppState{..} -> mapM op $ Map.keys appInvoiced
 
@@ -306,6 +294,3 @@ saveState v = get >>= liftIO . putMVar v
 -- an inconsistently used helper
 tShow :: Show a => a -> Text
 tShow = Text.pack . show
-
-
-

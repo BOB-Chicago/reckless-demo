@@ -11,6 +11,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE MultiWayIf            #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TupleSections         #-}
@@ -421,12 +422,12 @@ sweepOne hash =
 
 -- | Supply resources as required
 runApp :: Monoid r
-    => ((Key -> StateT AppState AppM r) -> StateT AppState AppM r)
+    => Maybe Key
     -> (MessageTo Client -> AppM r)
     -> AppM r
     -> AppST
     -> StateT AppState AppM r
-runApp onlyWithKey emit noop = \case
+runApp key emit noop = \case
     NoOp -> lift noop
 
     Emit x ->
@@ -456,19 +457,21 @@ runApp onlyWithKey emit noop = \case
         liftIO Time.getCurrentTime >>=
         runApp' . k
 
-    PaymentHandler hash thing next -> onlyWithKey $ \key ->
+    PaymentHandler hash thing next ->
         let logThing = case thing of
                 PaidForDOp _ _ -> "resource op"
                 PaidForOrder _ -> "order"
             logText = "PaymentHandler " <> logThing
         in
         logDebugN logText >>
-        let f state@AppState{..} = state
-                { appInvoiced = Map.insert hash thing appInvoiced
-                , appOwners = Map.insert hash key appOwners
-                }
+        let fAnon state@AppState{..} =
+                state { appInvoiced = Map.insert hash thing appInvoiced }
+
+            fOwner key state@AppState{..} =
+                state { appOwners = Map.insert hash key appOwners }
         in
-        modify f >>
+        modify fAnon >>
+        maybe (pure ()) (modify . fOwner) key >>
         runApp' next
 
     RunDataOp op ->
@@ -539,7 +542,7 @@ runApp onlyWithKey emit noop = \case
 
     where
 
-    runApp' = runApp onlyWithKey emit noop
+    runApp' = runApp key emit noop
 
     toSatoshis = \case
         Cents x    -> centsToSatoshis x
@@ -555,5 +558,3 @@ centsToSatoshis cents = return $ floor $ fixedRate * fromIntegral cents
     where
 
     fixedRate = 1e8 / 373574 -- cents / 1e8 satoshis
-
-
