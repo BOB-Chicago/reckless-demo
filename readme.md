@@ -1,5 +1,5 @@
 ---
-version: alpha/1.1
+version: alpha/1.2
 ---
 
 Recklessly exploring micropayments

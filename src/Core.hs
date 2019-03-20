@@ -323,7 +323,7 @@ protocol Pricing{..} = \case
         PaymentHandler hash (PaidForDOp hash createSurvey) $ Emit $ PaymentRequestMsg req
 
     NewBlob{..} ->
-        if blobLifetime > 365 then NoOp else
+        if blobLifetime > 365 || BS.length blob > 2048 then NoOp else
 
         let totalCost (Satoshis x) = Satoshis $ blobLifetime * x
             totalCost (Cents x)    = Cents $ blobLifetime * x

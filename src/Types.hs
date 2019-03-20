@@ -157,8 +157,11 @@ instance FromJSON Order where
             obj .: "fulfilled"
 
 
-data Contribution = Contribution Word32 Text
-    deriving (Show, Generic)
+data Contribution
+    = Contribution
+    { contributionAmount  :: Word32
+    , contributionMessage :: Text
+    } deriving (Show, Generic)
 
 instance ToJSON Contribution
 instance FromJSON Contribution
